@@ -1,0 +1,287 @@
+schema_version = 2
+project = "quickbeam"
+default_branch = "master"
+
+[phases.1]
+name = "Foundation"
+order = 1
+status = "pending"
+
+[phases.2]
+name = "Toolchain coverage"
+order = 2
+status = "pending"
+
+[phases.3]
+name = "JS API completeness"
+order = 3
+status = "pending"
+
+[phases.4]
+name = "Advanced proposals"
+order = 4
+status = "pending"
+
+[bundles.foundation]
+phase = 1
+order = 1
+description = "bulk-memory finalisieren + Spec-Konformanz-Gate"
+
+[bundles.toolchain]
+phase = 2
+order = 1
+description = "WASI, SIMD, Exceptions — real-world Toolchain-Output laeuft"
+
+[bundles.js-api]
+phase = 3
+order = 1
+description = "runtime-backed Memory/Global/Tables, importObject-Fehler"
+
+[bundles.proposals]
+phase = 4
+order = 1
+description = "GC-, Threads-, memory64-Entscheidungs-Spikes"
+
+[milestones.v0_1]
+name = "Real-world toolchain output runs"
+order = 1
+status = "active"
+target_version = "0.11.0"
+description = "Beweist, dass QuickBEAM unmodifizierte .wasm-Module von Rust/Go/TinyGo/Emscripten ausfuehrt (WASI, SIMD, Exceptions, bulk-memory)."
+
+[milestones.v0_2]
+name = "JS WebAssembly API spec-complete"
+order = 2
+status = "pending"
+target_version = "0.12.0"
+description = "Beweist, dass die in-JS WebAssembly.*-Polyfill den js-api-Spec-Teil fuer Linking/Memory/Table/Global besteht."
+
+[[task]]
+id = 1
+phase = 1
+bundle = "foundation"
+milestone = "v0_1"
+status = "pending"
+title = "bulk-memory-Branch finalisieren und mergen"
+scores = { d = 2, b = 6, u = 7 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+body = "Den wasm-bulk-memory-Branch fertigstellen. WASM_ENABLE_BULK_MEMORY_OPT wurde nur in native.ex gesetzt, nicht im @cDefine-Block von wamr.zig — angleichen. Tests (nativ via WASM.start/call UND JS via WebAssembly.instantiate) gruen halten, CI-Artefakt-Build (precompile.yml workflow_dispatch) pruefen, dann nach master mergen."
+acceptance_criteria = [
+  "wamr.zig @cDefine spiegelt alle @wamr_base_cflags aus native.ex (inkl. BULK_MEMORY_OPT)",
+  "Bulk-memory-Tests gruen: nativ (run()==43998) und JS WebAssembly API",
+  "precompile.yml erzeugt .tar.gz-Artefakte fuer alle 3 Targets",
+  "Branch nach master gemergt"
+]
+out_of_scope = [
+  "Strukturelle Single-Source-of-Truth fuer das Flag-Set (= Task 12); Task 1 macht nur den manuellen Eintrag-Abgleich",
+  "Der QUICKBEAM_WAMR_NOSAN UBSan-Escape-Hatch (uncommitteter native.ex-Diff) gehoert in einen eigenen Commit, nicht in den bulk-memory-Merge"
+]
+
+[[task]]
+id = 2
+phase = 1
+bundle = "foundation"
+milestone = "v0_1"
+status = "pending"
+title = "WASM-Spec-Konformanz-Testsuite als CI-Gate"
+scores = { d = 5, b = 8, u = 8 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1]
+body = "Die offizielle WebAssembly-Spec-Testsuite (.wast / wasm-tools) als Test-Target einbinden, das pro Proposal (mvp, bulk-memory, simd, reference-types, exceptions) Pass/Fail berichtet. Dient als Verifikations-Rueckgrat fuer alle folgenden Feature-Tasks: ein neu aktiviertes Feature gilt erst als fertig, wenn sein Proposal-Subset gruen ist."
+acceptance_criteria = [
+  "mix-Task oder Test-Tag fuehrt die Spec-Testsuite gegen WAMR aus",
+  "Ergebnis pro Proposal aufgeschluesselt (mvp/bulk-memory/reference-types mind. gruen)",
+  "In CI (ci.yml) verdrahtet, laeuft auf push/PR"
+]
+out_of_scope = ["Proposals, die noch nicht aktiviert sind, duerfen rot/skipped sein"]
+
+[[task]]
+id = 3
+phase = 2
+bundle = "toolchain"
+milestone = "v0_1"
+status = "pending"
+title = "WASI (libc-wasi) aktivieren mit sandboxed Capability-API"
+scores = { d = 7, b = 9, u = 9 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1, 2, 12]
+body = "WASM_ENABLE_LIBC_WASI=1 aktivieren (native.ex + wamr.zig). args, env und preopen-Verzeichnisse durch wamr_bridge.c und wasm_nif.zig plumben und in der nativen Elixir-API exponieren: QuickBEAM.WASM.start(module: ..., wasi: [args: [...], env: %{...}, preopen: [{guest, host}]]). Safe-by-default: KEIN Filesystem-Zugriff ohne explizit gewaehrten preopen (Capability-Sandbox); stdout/stderr abfangbar nach Elixir. Test mit einem echten WASI-Modul (TinyGo oder Rust wasm32-wasi)."
+acceptance_criteria = [
+  "Ein von TinyGo/Rust kompiliertes WASI-hello-world laeuft und sein stdout wird nach Elixir gecaptured",
+  "Kein Datei-/Verzeichniszugriff moeglich ohne expliziten preopen-Eintrag",
+  "args + env werden ans Modul durchgereicht",
+  "Instruction-Metering funktioniert weiter unter WASI",
+  "Flag in native.ex UND wamr.zig gesetzt"
+]
+out_of_scope = ["WASI-preview2 / Component Model (nur preview1)", "Netzwerk-Sockets"]
+
+[[task]]
+id = 4
+phase = 2
+bundle = "toolchain"
+milestone = "v0_1"
+status = "pending"
+title = "SIMD-Opcodes aktivieren"
+scores = { d = 3, b = 6, u = 6 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1, 2, 12]
+body = "WASM_ENABLE_SIMD=1 in native.ex und wamr.zig. Rust-Release-Builds und manche Emscripten-Outputs emittieren v128-SIMD; ohne dies scheitert deren Instanziierung. RISIKO ZUERST DE-RISKEN: wir laufen den Classic Interpreter (FAST_INTERP=0, AOT=0, JIT=0) — historisch der schwaechste SIMD-Pfad in WAMR (v128 war zuerst nur in AOT/Fast-Interp robust). Vor dem Impl-Scope verifizieren, ob Classic-Interp-SIMD die noetigen v128-Opcodes ueberhaupt voll deckt; ergibt das eine Luecke, wird Task 4 zum Spike (Decision-Doc + ggf. Pfadwechsel) statt eines reinen Flag-Flips, und d steigt. Test mit einem SIMD-nutzenden Modul; Konformanz-Subset simd aus Task 2 gruen."
+acceptance_criteria = [
+  "Vorab verifiziert: Classic-Interp deckt die noetigen v128-Opcodes (sonst als Spike umscoped)",
+  "v128-SIMD-Modul instanziiert und rechnet korrekt",
+  "Spec-Konformanz-Subset simd (Task 2) gruen",
+  "Flag in native.ex UND wamr.zig gesetzt",
+  "Binary-Size-Delta dokumentiert"
+]
+
+[[task]]
+id = 5
+phase = 2
+bundle = "toolchain"
+milestone = "v0_1"
+status = "pending"
+title = "Exception-Handling aktivieren + JS Tag/Exception/JSTag"
+scores = { d = 6, b = 6, u = 6 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1, 2, 12]
+body = "WASM_ENABLE_EXCE_HANDLING=1 (native.ex + wamr.zig) fuer das wasm-exceptions-Proposal (C++-Exceptions, manche Rust-Builds). JS-Surface in wasm_api.ex/wasm_js.zig ergaenzen: WebAssembly.Tag, WebAssembly.Exception, WebAssembly.JSTag. Tests fuer throw/catch ueber die wasm-Grenze."
+acceptance_criteria = [
+  "Modul mit wasm-exceptions instanziiert und wirft/faengt korrekt",
+  "WebAssembly.Tag / Exception / JSTag in JS-Kontexten verfuegbar und spec-nah",
+  "Flag in native.ex UND wamr.zig gesetzt"
+]
+
+[[task]]
+id = 6
+phase = 3
+bundle = "js-api"
+milestone = "v0_2"
+status = "pending"
+title = "JS WebAssembly: runtime-backed Memory und Global"
+scores = { d = 6, b = 6, u = 6 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1]
+body = "Aktuell sind Memory/Global in der JS-API snapshot-basiert (docs/wasm-js-api-roadmap.md Phase 2+4). Exportierte UND importierte Memory runtime-backed machen, Memory.buffer- und grow()-Semantik korrigieren, importierte Globals mit geteiltem State, Mutabilitaets-Checks, i64-Globals als BigInt. Live-Sichtbarkeit von Mutationen zwischen JS und wasm."
+acceptance_criteria = [
+  "Memory.buffer reflektiert Live-Runtime-Speicher; grow() aktualisiert buffer korrekt",
+  "Importierte Memory in beide Richtungen sichtbar (JS schreibt -> wasm liest und umgekehrt)",
+  "Importierte/exportierte Globals teilen State; Mutabilitaets-Checks greifen; i64 als BigInt"
+]
+
+[[task]]
+id = 7
+phase = 3
+bundle = "js-api"
+milestone = "v0_2"
+status = "pending"
+title = "JS WebAssembly: runtime-backed Tables (imports + exports)"
+scores = { d = 6, b = 5, u = 6 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [6]
+body = "Tables fehlen komplett in der JS-API (docs/wasm-js-api-roadmap.md Phase 3). Exportierte und importierte Tables runtime-backed implementieren, geteilte JS/wasm-Mutations-Sichtbarkeit. Baut auf der runtime-backed-Instanz-Plumbing aus Task 6 auf."
+acceptance_criteria = [
+  "WebAssembly.Table import und export funktionieren",
+  "table.get/set aus JS sind fuer wasm sichtbar und umgekehrt",
+  "funcref/externref korrekt behandelt"
+]
+
+[[task]]
+id = 8
+phase = 3
+bundle = "js-api"
+milestone = "v0_2"
+status = "pending"
+title = "JS WebAssembly: vollstaendige importObject-Fehlersemantik"
+scores = { d = 4, b = 4, u = 4 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [6, 7]
+body = "Letzte JS-API-Luecke: LinkError/TypeError an den spec-korrekten Stellen fuer alle Import-Kinds (function/memory/table/global) inkl. Shape-/Typ-Mismatch-Edgecases. Erst sinnvoll, wenn Memory/Table runtime-backed sind (Task 6+7)."
+acceptance_criteria = [
+  "Fehlender/falsch-getypter Import wirft LinkError bzw. TypeError wie in der js-api-Spec",
+  "Edgecase-Coverage fuer alle vier Import-Kinds getestet"
+]
+
+[[task]]
+id = 9
+phase = 4
+bundle = "proposals"
+status = "pending"
+title = "Spike: wasm-gc-Support — Go/No-Go"
+scores = { d = 8, b = 4, u = 3 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1]
+body = "Entscheidungs-Spike (kein Implementierungs-Pflichtscope). Evaluieren, ob WASM_ENABLE_GC im Classic-Interpreter den Aufwand/Binary-Size wert ist, gemessen an den Toolchain-Outputs, die User real brauchen (Kotlin/wasm, Dart, Java emittieren wasm-gc). Output: kurzes Decision-Doc + Go/No-Go, ggf. Folge-Task."
+acceptance_criteria = [
+  "Decision-Doc unter docs/ mit Binary-Size-/Aufwands-Schaetzung und klarer Empfehlung",
+  "Falls Go: konkrete Folge-Task via rmap new gefiled"
+]
+out_of_scope = ["Tatsaechliche GC-Implementierung (erst nach Go-Entscheidung)"]
+
+[[task]]
+id = 10
+phase = 4
+bundle = "proposals"
+status = "pending"
+title = "Spike: wasm-threads / shared-memory auf der BEAM"
+scores = { d = 8, b = 4, u = 3 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1]
+body = "Entscheidungs-Spike. WASM_ENABLE_THREAD_MGR + WASM_ENABLE_SHARED_MEMORY wuerden wasm-Threads ermoeglichen — aber die Interaktion mit dem BEAM-Scheduler, Dirty-NIFs und dem Ein-OS-Thread-pro-Runtime-Modell (siehe docs/architecture.md) ist nichttrivial und potenziell gefaehrlich. Evaluieren, dokumentieren, Go/No-Go."
+acceptance_criteria = [
+  "Decision-Doc mit Analyse der BEAM-Scheduler-Interaktion und Empfehlung",
+  "Falls Go: Folge-Task gefiled"
+]
+
+[[task]]
+id = 11
+phase = 4
+bundle = "proposals"
+status = "pending"
+title = "Spike: memory64-Support"
+scores = { d = 5, b = 3, u = 3 }
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+depends_on = [1]
+body = "Entscheidungs-Spike fuer WASM_ENABLE_MEMORY64=1. Geringe Nachfrage heute; evaluieren, ob ein realer Consumer existiert, sonst zurueckstellen."
+acceptance_criteria = ["Kurz-Notiz mit Empfehlung; Task wird sonst auf blocked/superseded gesetzt"]
+
+[[task]]
+id = 12
+phase = 1
+bundle = "foundation"
+milestone = "v0_1"
+status = "pending"
+title = "WASM_ENABLE_*-Flags aus einer Quelle generieren + Drift-Guard"
+scores = { d = 4, b = 7, u = 8 }
+depends_on = [1]
+acceptance_criteria = ["Das WASM_ENABLE_*-Set ist nur noch an EINER Stelle hand-gepflegt; die andere wird daraus abgeleitet", "Ein Guard (Test oder Compile-Assert) schlaegt fehl, wenn native.ex- und wamr.zig-Flags divergieren", "Eine Flag-Aenderung erfordert nur noch eine Edit-Stelle (an Task 3/4/5 verifizierbar)", "Alle bestehenden WASM-Tests bleiben gruen"]
+files_to_modify = ["lib/quickbeam/native.ex", "lib/quickbeam/wamr.zig"]
+touches = ["lib/quickbeam/native.ex", "lib/quickbeam/wamr.zig", "test/wasm_test.exs"]
+body = "Das WASM_ENABLE_*-Feature-Set existiert doppelt und hand-gepflegt: native.ex @wamr_base_cflags (kompiliert WAMRs .c) und wamr.zig @cDefine (kompiliert das Zig-Glue / @cImport der WAMR-Header). Beide MUESSEN uebereinstimmen, weil WAMR-Structs konditional auf diese Makros kompiliert werden — eine Divergenz ist ein stiller Memory-Layout-/ODR-Bug, kein Compile-Fehler (Task 1 belegt, dass sie schon gedriftet sind: BULK_MEMORY_OPT). Die zwei Kopien zu einer Quelle machen: das @cDefine-Set aus native.ex generieren ODER beide aus einer gemeinsamen Liste ableiten, sodass jede kuenftige Flag-Aenderung (Tasks 3/4/5) genau EINE Stelle anfasst. Zusaetzlich ein Guard, der die zwei Sets bei Build/Test auf Gleichheit prueft (Compile-Time-Assert oder Test), damit eine Drift als CI-Failure auftaucht und nicht erst beim Consumer als Speicherkorruption."
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
+
+[[task]]
+id = 13
+phase = 2
+bundle = "toolchain"
+milestone = "v0_1"
+status = "pending"
+title = "Golden-Corpus echter Toolchain-.wasm als v0_1-Milestone-Beweis"
+scores = { d = 3, b = 8, u = 7 }
+depends_on = [2]
+acceptance_criteria = ["Mind. 3 echte Toolchain-.wasm-Fixtures (Rust/TinyGo/Emscripten) im Repo, Herkunft+Build-Cmd dokumentiert", "Jedes Fixture instanziiert und rechnet korrekt via nativer API UND JS WebAssembly-API", "In CI verdrahtet; ein nicht-laufendes Fixture failt den Build"]
+out_of_scope = ["Vollstaendige Sprachabdeckung (Go-GC, Kotlin/wasm gehoeren zu den Phase-4-Spikes)"]
+body = "Die v0_1-Hypothese ist 'unmodifizierte .wasm von Rust/Go/TinyGo/Emscripten laeuft' — aber aktuell wird sie nur inzidentell durch Per-Feature-Unit-Tests gestuetzt, keine Task liefert den direkten Beweis. Einen kleinen Golden-Corpus echter, von echten Toolchains kompilierter .wasm-Binaries als Fixtures committen (je ein minimales Modul aus Rust wasm32, TinyGo, und Emscripten/C), die ueber WASM.start/call UND die JS WebAssembly-API instanziieren+korrekt rechnen muessen. Dient als der explizite Milestone-Beweis und waechst mit den Toolchain-Features (Tasks 3/4/5: WASI, SIMD, Exceptions) mit. Baut auf dem Spec-Gate (Task 2) auf, ist aber komplementaer: das Gate prueft Spec-Konformanz, der Corpus prueft real-world-Output."
+created_at = "2026-06-18"
+scored_at = "2026-06-18"
