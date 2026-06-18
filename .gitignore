@@ -31,6 +31,12 @@ test/wpt_reference/
 fuzz/.zig-cache/
 fuzz/zig-out/
 
+# Local hex docs cache
+.hex-docs/
+
+# Local MCP server wiring (harness driver, per-machine — workflow documented in CLAUDE.md)
+.mcp.json
+
 # JS dev tooling
 node_modules/
 bun.lock
